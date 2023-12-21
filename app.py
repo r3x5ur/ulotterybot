@@ -19,7 +19,7 @@ API_ID = os.getenv('API_ID')
 API_HASH = os.getenv('API_HASH')
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = os.getenv('ADMIN_ID')
-BOT_PROXY = os.getenv('ENABLE_PROXY')
+BOT_PROXY = os.getenv('BOT_PROXY')
 APP_NAME = 'lotteries'
 
 
@@ -345,4 +345,11 @@ class LotteryBot(object):
 
 if __name__ == '__main__':
     bot = LotteryBot()
-    bot.start_server()
+    try:
+        bot.start_server()
+    except KeyboardInterrupt:
+        print('\n[*] Stopping Service...', end='')
+        loop = asyncio.get_event_loop()
+        loop.call_later(0, lambda _: print('\r[+] Service stopped'), None)
+        loop.run_until_complete(bot.aiodb.close())
+

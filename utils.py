@@ -1,4 +1,3 @@
-import os
 from typing import TypedDict, Union, Optional
 from urllib.parse import urlparse, parse_qs
 from dblite import aioDbLite

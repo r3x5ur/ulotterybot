@@ -5,9 +5,4 @@ services:
     image: lottery-bot
     volumes:
       - ./:/app
-    environment:
-      - API_ID=12345678
-      - API_HASH=1234567890abcdef1234567890abcdef
-      - BOT_TOKEN=1234567890:AAB1234567890abcdef1234567890abcdef
-      - BOT_PROXY=socks5://127.0.0.1:7890
     restart: always

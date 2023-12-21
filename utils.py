@@ -227,7 +227,7 @@ def lottery2message(lottery: LotteryType, show_prize=False):
 抽奖状态：`{lottery_status[lottery['status']]}`"""
     if show_prize:
         prize = lottery["prize"]
-        prize_text = ('\n'.join(f'`{prize}`')) if isinstance(prize, list) else f'`{prize}`'
+        prize_text = ('\n' + '\n'.join(map(lambda x: f'`{x}`', prize))) if isinstance(prize, list) else f'`{prize}`'
         text += f'\n奖品类型：`{"相同" if lottery["same_prize"] else "各不相同"}`'
         text += f'\n抽奖奖品：{prize_text}'
     return text

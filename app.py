@@ -338,9 +338,12 @@ class LotteryBot(object):
         try:
             if not username:
                 _temp_message = await message.reply(f'需要设置用户名才能参与抽奖')
+                asyncio.create_task(_delete_temp_message(_temp_message, 5))
+                return self
             lottery_id = await add_participant(self.aiodb, user_id=user_id, user_name=username, chat_id=chat.id)
             if lottery_id is None:
                 _temp_message = await message.reply(f'服务异常，请联系管理员')
+                asyncio.create_task(_delete_temp_message(_temp_message, 5))
                 return self
             _temp_message = await message.reply(f'@{username} 参与抽奖成功')
             asyncio.create_task(_delete_temp_message(_temp_message, 5))

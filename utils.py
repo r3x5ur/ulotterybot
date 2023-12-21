@@ -35,6 +35,8 @@ class LotteryType(TypedDict):
     status: int
     # 开奖人数 大于 0 将启用自动开奖
     drawn_people: int
+    # 中奖人数 数字或者百分比
+    winner_people: str
     # 参与口令
     password: str
     # 奖品是否相同，为 true 时 prize 将发送给每个人，为 false 则以\n分割并发送每个人
@@ -47,7 +49,7 @@ LotteryType.TABLE_NAME = 'lotteries'
 
 
 def make_lottery(raw: Union[list, tuple]) -> LotteryType:
-    _id, chat_id, message_id, title, status, drawn_people, password, same_prize, prize = raw
+    _id, chat_id, message_id, title, status, drawn_people, winner_people, password, same_prize, prize = raw
     return LotteryType(
         id=_id,
         chat_id=chat_id,
@@ -55,6 +57,7 @@ def make_lottery(raw: Union[list, tuple]) -> LotteryType:
         title=title,
         status=status,
         drawn_people=drawn_people,
+        winner_people=winner_people,
         password=password,
         same_prize=bool(same_prize),
         prize=prize if same_prize else str(prize).split('\n')
@@ -98,6 +101,7 @@ async def get_db_connect(app_name: str):
         title='TEXT NOT NULL',
         status='int(1)',  # 抽奖状态 0 已暂停 1 抽奖中 2 已结束
         drawn_people='int',  # 开奖人数 为 null 或者 0 时 不自动开奖
+        winner_people='varchar(255)',  # 数字或者百分比
         password='varchar(1024)',  # 参与抽奖口令
         same_prize='int(1)',  # 1 相同的奖品  0 每个人都不一样
         prize='TEXT',  # 奖品
@@ -140,6 +144,7 @@ async def set_lottery(aiodb: aioDbLite, lottery_id: int, **kwargs):
     title = kwargs.get('title')
     status = kwargs.get('status')
     drawn_people = kwargs.get('drawn_people')
+    winner_people = kwargs.get('winner_people')
     password = kwargs.get('password')
     same_prize = kwargs.get('same_prize')
     prize = kwargs.get('prize')
@@ -151,6 +156,8 @@ async def set_lottery(aiodb: aioDbLite, lottery_id: int, **kwargs):
         updater['title'] = title
     if drawn_people is not None:
         updater['drawn_people'] = drawn_people
+    if winner_people is not None:
+        updater['winner_people'] = winner_people
     if password is not None:
         updater['password'] = password
     if same_prize is not None:
@@ -166,7 +173,8 @@ async def set_lottery(aiodb: aioDbLite, lottery_id: int, **kwargs):
     await aiodb.update(LotteryType.TABLE_NAME, **updater)
 
 
-async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=0, password='默认口令',
+async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=0, winner_people='50%',
+                      password='默认口令',
                       same_prize=1,
                       prize=''):
     await aiodb.add(
@@ -176,6 +184,7 @@ async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, dr
         title=title,
         status=status,
         drawn_people=drawn_people,
+        winner_people=winner_people,
         password=password,
         same_prize=same_prize,
         prize=prize,
@@ -214,12 +223,13 @@ def lottery2message(lottery: LotteryType, show_prize=False):
     text = f"""抽奖名称：`{lottery['title']}`
 参与口令：`$${lottery['password']}`
 开奖人数：`{'手动开奖' if lottery['drawn_people'] == 0 else int2number(lottery['drawn_people'])}`
+中奖人数：`{lottery['winner_people'] or '50%'}`
 抽奖状态：`{lottery_status[lottery['status']]}`"""
     if show_prize:
         prize = lottery["prize"]
-        prize_text = ('\n' + '\n'.join(prize)) if isinstance(prize, list) else prize
+        prize_text = ('\n'.join(f'`{prize}`')) if isinstance(prize, list) else f'`{prize}`'
         text += f'\n奖品类型：`{"相同" if lottery["same_prize"] else "各不相同"}`'
-        text += f'\n抽奖奖品：```{prize_text}```'
+        text += f'\n抽奖奖品：{prize_text}'
     return text
 
 

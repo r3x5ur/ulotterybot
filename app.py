@@ -1,7 +1,9 @@
 import asyncio
 import os
 import random
+import re
 import sqlite3
+import string
 
 from dblite import aioDbLite
 from dotenv import load_dotenv
@@ -56,7 +58,8 @@ config_doc = f"""/create 创建一个抽奖(需要在群里发送)
 /info   查看当前抽奖信息
 {manage_doc}
 `/set title 抽奖名称` 设置抽奖名称
-`/set drawn_people 10` 设置开奖人数，为0时动手开奖
+`/set drawn_people 20` 设置开奖人数，为0时动手开奖
+`/set winner_people 10` 设置中奖人数，数字或者百分比
 `/set password 参与口令` 设置参与口令
 `/set same_prize true` 设置奖品是否相同
 `/set prize 奖品`     设置奖品，多个则`shift+回车`输入多行
@@ -183,9 +186,21 @@ class LotteryBot(object):
             await message.reply(f'**参数错误**\n你可以使用以下命令:\n{config_doc}')
             return self
 
+        def winner_people_converter(_str: str):
+            _str = _str.strip()
+            _default = '50%'
+            if _str.isdigit():
+                return _str
+            if _str.endswith('%'):
+                __s = _str.split('%')[0]
+                if __s.isdigit():
+                    return _str
+            return _default
+
         converter = {
             'title': lambda l: ' '.join(l),
             'drawn_people': lambda l: int(l[0]),
+            'winner_people': lambda l: winner_people_converter(l[0]),
             'password': lambda l: ' '.join(l),
             'same_prize': lambda l: l[0] == 'true',
             'prize': lambda l: '\n'.join(l),
@@ -251,7 +266,7 @@ class LotteryBot(object):
         await message.reply(f'**当前可使用的命令**\n{manage_doc}\n**当前抽奖信息**\n{lottery2message(lottery, True)}')
         return self
 
-    async def start_lottery(self, lottery: LotteryType, message: Message, restart=False):
+    async def start_lottery(self, lottery: LotteryType, message: Message):
         lottery_id = lottery['id']
         await set_lottery(self.aiodb, lottery_id, status=1)
         lottery = await load_lottery_by_id(self.aiodb, lottery_id)
@@ -269,9 +284,14 @@ class LotteryBot(object):
         await set_lottery(self.aiodb, lottery_id, status=2)
         lottery = await load_lottery_by_id(self.aiodb, lottery_id)
         participants = await load_participants(self.aiodb, lottery_id)
-        winners = participants if \
-            lottery['drawn_people'] == 0 \
-            else random.sample(participants, k=lottery['drawn_people'])
+        winner_people = lottery['winner_people']
+        if winner_people.isdigit():
+            sample_count = int(winner_people)
+        elif winner_people.endswith('%'):
+            sample_count = len(participants) * int(winner_people.split('%')[0]) / 100
+        else:
+            sample_count = len(participants) / 2
+        winners = random.sample(participants, k=sample_count)
         prize = [lottery['prize']] * len(winners) if lottery['same_prize'] else lottery['prize']
         _empty = '无奖品，请联系抽奖发布者'
         for winner in winners:
@@ -352,4 +372,3 @@ if __name__ == '__main__':
         loop = asyncio.get_event_loop()
         loop.call_later(0, lambda _: print('\r[+] Service stopped'), None)
         loop.run_until_complete(bot.aiodb.close())
-

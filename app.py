@@ -373,7 +373,7 @@ class LotteryBot(object):
             return self
         user_id = message.from_user.id
         winner = await get_winner_by_user(self.aiodb, user_id)
-        if winner is None:
+        if winner is None or winner['prize'] is None:
             await message.reply('没有中奖信息')
         lottery = await load_lottery_by_id(self.aiodb, winner['lottery_id'])
         if lottery is None:

@@ -15,6 +15,8 @@ __all__ = [
     'add_lottery',
     'add_participant',
     'load_participants',
+    'set_winner_prize',
+    'get_winner_by_user',
     'int2number',
     'lottery_status2message',
     'lottery_winner2message',
@@ -70,18 +72,21 @@ class ParticipantType(TypedDict):
     user_name: str
     # 关联抽奖
     lottery_id: int
+    # 中奖后获得的奖品
+    prize: str
 
 
 ParticipantType.TABLE_NAME = 'participants'
 
 
 def make_participant(raw: Union[list, tuple]) -> ParticipantType:
-    _id, user_id, user_name, lottery_id, = raw
+    _id, user_id, user_name, lottery_id, prize = raw
     return ParticipantType(
         id=_id,
         user_id=user_id,
         user_name=user_name,
         lottery_id=lottery_id,
+        prize=prize
     )
 
 
@@ -112,6 +117,7 @@ async def get_db_connect(app_name: str):
         user_id='int',
         user_name='varchar(1024)',
         lottery_id='int',  # 本轮抽奖ID
+        prize='TEXT',  # 奖品
     )
     sql = f'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_users_lottery ON {ParticipantType.TABLE_NAME} ' \
           f'(user_id, user_name, lottery_id);'
@@ -210,6 +216,17 @@ async def add_participant(aiodb: aioDbLite, user_id, user_name, **kwargs):
     return lottery_id
 
 
+async def set_winner_prize(aiodb: aioDbLite, participant_id: int, prize: str):
+    await aiodb.update(ParticipantType.TABLE_NAME, prize=prize, id=participant_id)
+
+
+async def get_winner_by_user(aiodb: aioDbLite, user_id: int) -> ParticipantType:
+    sql = f'SELECT * FROM `{ParticipantType.TABLE_NAME}` WHERE user_id = ? ORDER BY id DESC'
+    cursor = await aiodb.cursor.execute(sql, (user_id,))
+    participant_raw = await cursor.fetchone()
+    return make_participant(participant_raw) if participant_raw else None
+
+
 async def load_participants(aiodb: aioDbLite, lottery_id: int):
     participant_raw = await aiodb.select(ParticipantType.TABLE_NAME, '*', lottery_id=lottery_id)
     return list(map(make_participant, participant_raw))
@@ -233,8 +250,9 @@ def lottery2message(lottery: LotteryType, show_prize=False):
     return text
 
 
-def prize2message(prize: str) -> str:
+def prize2message(name: str, prize: str) -> str:
     return f"""{_title.format('中奖啦')}
+抽奖名称：`{name}`
 您的奖品：
 `{prize}`
 {_footer}"""
@@ -249,7 +267,12 @@ def lottery_status2message(lottery: LotteryType, participants: list[ParticipantT
 {_footer}"""
 
 
-def lottery_winner2message(lottery: LotteryType, participants: list[ParticipantType], winners: list[ParticipantType]):
+def lottery_winner2message(
+        lottery: LotteryType,
+        participants: list[ParticipantType],
+        winners: list[ParticipantType],
+        _bot
+):
     winners_mapped = map(lambda x: f'<u>**[{x["user_name"]}](tg://user?id={x["user_id"]})**</u>', winners)
     winner_text = (' ' * 4).join(winners_mapped)
     return f"""{_title.format('开奖啦')}
@@ -258,6 +281,7 @@ def lottery_winner2message(lottery: LotteryType, participants: list[ParticipantT
 中奖人数：`{int2number(len(winners))}`
 中奖名单：
 {winner_text}
+**请以上中奖者向我发送([私聊](https://t.me/{_bot.username}))`/prize`获取奖品**
 {_footer}"""
 
 

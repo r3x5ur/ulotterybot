@@ -1,9 +1,7 @@
 import asyncio
 import os
 import random
-import re
 import sqlite3
-import string
 
 from dblite import aioDbLite
 from dotenv import load_dotenv
@@ -12,7 +10,7 @@ from pyrogram.enums import ChatMemberStatus, ChatType, MessageEntityType
 from pyrogram.errors import MessageNotModified, ChatAdminRequired
 from pyrogram.handlers import MessageHandler
 from pyrogram.handlers.handler import Handler
-from pyrogram.types import BotCommand, Message, BotCommandScopeAllChatAdministrators, ChatMember, Chat
+from pyrogram.types import BotCommand, Message, ChatMember, Chat
 
 from utils import *
 
@@ -74,18 +72,18 @@ class LotteryBot(object):
     async def init_server(self):
         self.aiodb = await get_db_connect(APP_NAME)
         await self.app.start()
-        print('\r[+] Service started successfully')
+        print('[+] Service started successfully')
         await self.app.set_bot_commands([
             BotCommand('create', '创建抽奖'),
             BotCommand('help', '帮助信息'),
             BotCommand('info', '抽奖信息'),
-        ], scope=BotCommandScopeAllChatAdministrators())
+            BotCommand('prize', '获取中奖奖品'),
+        ])
         await idle()
         await self.app.stop()
         await self.aiodb.close()
 
     def start_server(self):
-        print('[*] Starting service...', end='')
         self.app = Client(
             APP_NAME,
             api_id=API_ID,
@@ -99,6 +97,7 @@ class LotteryBot(object):
         self.app.add_handler(MessageHandler(self.set_lottery_handler, filters.command(['set'])))
         self.app.add_handler(MessageHandler(self.read_lottery_handler, filters.command(['info'])))
         self.app.add_handler(MessageHandler(self.manage_lottery_handler, filters.command(['manage'])))
+        self.app.add_handler(MessageHandler(self.get_prize_handler, filters.command(['prize'])))
         self.app.run(self.init_server())
 
     async def send_helper_message(self, client: Client, message: Message):
@@ -270,7 +269,8 @@ class LotteryBot(object):
         lottery_id = lottery['id']
         await set_lottery(self.aiodb, lottery_id, status=1)
         lottery = await load_lottery_by_id(self.aiodb, lottery_id)
-        await message.edit_text(lottery_status2message(lottery, []))
+        participants = await load_participants(self.aiodb, lottery_id)
+        await message.edit_text(lottery_status2message(lottery, participants))
         pined = await message.pin()
         pined and (await pined.delete())
         return lottery
@@ -291,15 +291,13 @@ class LotteryBot(object):
             sample_count = len(participants) * int(winner_people.split('%')[0]) / 100
         else:
             sample_count = len(participants) / 2
-        winners = random.sample(participants, k=sample_count)
+        winners = random.sample(participants, k=int(sample_count))
         prize = [lottery['prize']] * len(winners) if lottery['same_prize'] else lottery['prize']
         _empty = '无奖品，请联系抽奖发布者'
         for winner in winners:
-            p = prize.pop() if len(prize) else _empty
-            username = winner['user_name']
-            await self.app.send_message(chat_id=username, text=prize2message(p or _empty))
-        await message.edit_text(lottery_winner2message(lottery, participants, winners))
-        await message.unpin()
+            await set_winner_prize(self.aiodb, winner['id'], prize.pop() if len(prize) else _empty)
+        _bot = await self.app.get_me()
+        await message.edit_text(lottery_winner2message(lottery, participants, winners, _bot))
         asyncio.create_task(_delete_temp_message(message, 600))
         return lottery
 
@@ -335,19 +333,20 @@ class LotteryBot(object):
         chat = message.chat
         user_id = user.id
         username = user.username
+        _temp_message = None
+        if not username:
+            username = ' '.join(filter(lambda x: x and x.strip(), [user.first_name, user.last_name]))
+        if not username:
+            username = 'U%x' % user_id
         try:
             if not username:
                 _temp_message = await message.reply(f'需要设置用户名才能参与抽奖')
-                asyncio.create_task(_delete_temp_message(_temp_message, 5))
                 return self
             lottery_id = await add_participant(self.aiodb, user_id=user_id, user_name=username, chat_id=chat.id)
             if lottery_id is None:
                 _temp_message = await message.reply(f'服务异常，请联系管理员')
-                asyncio.create_task(_delete_temp_message(_temp_message, 5))
                 return self
             _temp_message = await message.reply(f'@{username} 参与抽奖成功')
-            asyncio.create_task(_delete_temp_message(_temp_message, 5))
-            asyncio.create_task(_delete_temp_message(message, 5))
             lottery = await load_lottery_by_id(self.aiodb, lottery_id)
             participants = await load_participants(self.aiodb, lottery_id)
             chat_message = await client.get_messages(lottery['chat_id'], lottery['message_id'])
@@ -363,15 +362,32 @@ class LotteryBot(object):
                 await self.draw_lottery(lottery, chat_message)
         except sqlite3.IntegrityError:
             pass
+        finally:
+            _temp_message and asyncio.create_task(_delete_temp_message(_temp_message, 5))
+            asyncio.create_task(_delete_temp_message(message, 5))
+        return self
+
+    async def get_prize_handler(self, client: Client, message: Message):
+        chat = message.chat
+        if chat.type != ChatType.PRIVATE:
+            return self
+        user_id = message.from_user.id
+        winner = await get_winner_by_user(self.aiodb, user_id)
+        if winner is None:
+            await message.reply('没有中奖信息')
+        lottery = await load_lottery_by_id(self.aiodb, winner['lottery_id'])
+        if lottery is None:
+            await message.reply('没有抽奖信息')
+        await message.reply(prize2message(lottery['title'], winner['prize']))
         return self
 
 
 if __name__ == '__main__':
     bot = LotteryBot()
     try:
+        print('[*] Starting service...')
         bot.start_server()
     except KeyboardInterrupt:
-        print('\n[*] Stopping Service...', end='')
         loop = asyncio.get_event_loop()
-        loop.call_later(0, lambda _: print('\r[+] Service stopped'), None)
+        loop.call_later(0, lambda _: print('[+] Service stopped'), None)
         loop.run_until_complete(bot.aiodb.close())

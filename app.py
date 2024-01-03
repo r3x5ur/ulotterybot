@@ -7,7 +7,7 @@ from dblite import aioDbLite
 from dotenv import load_dotenv
 from pyrogram import Client, idle, filters
 from pyrogram.enums import ChatMemberStatus, ChatType, MessageEntityType
-from pyrogram.errors import MessageNotModified, ChatAdminRequired
+from pyrogram.errors import MessageNotModified, ChatAdminRequired, MessageDeleteForbidden
 from pyrogram.handlers import MessageHandler
 from pyrogram.handlers.handler import Handler
 from pyrogram.types import BotCommand, Message, ChatMember, Chat
@@ -48,12 +48,22 @@ async def get_group_chat_id(client: Client, message: Message, limit: int = 100) 
                     return int(chat_id)
 
 
+async def delete_all_message(client: Client, message: Message):
+    chat = message.chat
+    messages = await client.get_messages(chat_id=chat.id, message_ids=range(message.id, 0, -1))
+    for msg in messages:
+        try:
+            await client.delete_messages(chat_id=chat.id, message_ids=msg.id)
+        except MessageDeleteForbidden:
+            pass
+
 manage_doc = """`/manage start` 开启抽奖
 `/manage pause` 暂停抽奖
 `/manage cancel` 取消抽奖
 `/manage draw` 手动开奖"""
 config_doc = f"""/create 创建一个抽奖(需要在群里发送)
 /info   查看当前抽奖信息
+/clean  清空我发给你的信息
 {manage_doc}
 `/set title 抽奖名称` 设置抽奖名称
 `/set drawn_people 20` 设置开奖人数，为0时动手开奖
@@ -78,6 +88,7 @@ class LotteryBot(object):
             BotCommand('help', '帮助信息'),
             BotCommand('info', '抽奖信息'),
             BotCommand('prize', '获取中奖奖品'),
+            BotCommand('clean', '清除全部信息'),
         ])
         await idle()
         await self.app.stop()
@@ -98,6 +109,7 @@ class LotteryBot(object):
         self.app.add_handler(MessageHandler(self.read_lottery_handler, filters.command(['info'])))
         self.app.add_handler(MessageHandler(self.manage_lottery_handler, filters.command(['manage'])))
         self.app.add_handler(MessageHandler(self.get_prize_handler, filters.command(['prize'])))
+        self.app.add_handler(MessageHandler(delete_all_message, filters.command(['clean'])))
         self.app.run(self.init_server())
 
     async def send_helper_message(self, client: Client, message: Message):

@@ -273,7 +273,7 @@ def lottery_winner2message(
         winners: list[ParticipantType],
         _bot
 ):
-    winners_mapped = map(lambda x: f'<u>**[{x["user_name"]}](tg://user?id={x["user_id"]})**</u>', winners)
+    winners_mapped = map(lambda x: f'[{x["user_name"]}](tg://user?id={x["user_id"]})', winners)
     winner_text = (' ' * 4).join(winners_mapped)
     return f"""{_title.format('开奖啦')}
 {lottery2message(lottery)}

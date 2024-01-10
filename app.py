@@ -112,6 +112,10 @@ class LotteryBot(object):
         self.app.add_handler(MessageHandler(delete_all_message, filters.command(['clean'])))
         self.app.run(self.init_server())
 
+    async def check_allow(self, chat_id: int, user_id: int):
+        member = await self.app.get_chat_member(chat_id=chat_id, user_id=user_id)
+        return member_is_admin(member)
+
     async def send_helper_message(self, client: Client, message: Message):
         chat = message.chat
         if chat.type != ChatType.PRIVATE:
@@ -130,24 +134,23 @@ class LotteryBot(object):
             await message.reply('请在群里发送此命令')
             return self
         chat_id = chat.id
+        user_id = message.from_user.id
+        _bot = await client.get_me()
+        if not (await self.check_allow(chat_id, user_id)):
+            return self
+        bot_member = await client.get_chat_member(chat_id=chat_id, user_id=_bot.id)
+        if not member_is_admin(bot_member):
+            await message.reply('请先将我设置成管理员')
+            return self
         old_lottery = await load_lottery(self.aiodb, chat_id)
         if old_lottery:
             _temp_message = await client.send_message(chat_id, '**存在未结束的抽奖**',
                                                       reply_to_message_id=old_lottery['message_id'])
             asyncio.create_task(_delete_temp_message(_temp_message, 5))
             return self
-        user_id = message.from_user.id
-        _bot = await client.get_me()
         username = message.from_user.username
         if not username:
             await message.reply('请先设置用户名')
-            return self
-        member = await client.get_chat_member(chat_id=chat_id, user_id=user_id)
-        if not member_is_admin(member):
-            return self
-        bot_member = await client.get_chat_member(chat_id=chat_id, user_id=_bot.id)
-        if not member_is_admin(bot_member):
-            await message.reply('请先将我设置成管理员')
             return self
         title = message.command[1] if len(message.command) > 1 else '请设置抽奖名称'
         text = f'创建抽奖成功，请查看[私聊](https://t.me/{_bot.username})信息设置抽奖内容'
@@ -188,6 +191,8 @@ class LotteryBot(object):
     async def set_lottery_handler(self, client: Client, message: Message):
         chat_id, lottery = await self._get_current_lottery(client, message)
         if lottery is None:
+            return self
+        if not (await self.check_allow(chat_id, message.from_user.id)):
             return self
         if lottery['status'] != 0:
             await message.reply('请先暂停抽奖')
@@ -232,8 +237,10 @@ class LotteryBot(object):
         return self
 
     async def read_lottery_handler(self, client: Client, message: Message):
-        _, lottery = await self._get_current_lottery(client, message)
+        chat_id, lottery = await self._get_current_lottery(client, message)
         if lottery is None:
+            return self
+        if not (await self.check_allow(chat_id, message.from_user.id)):
             return self
         await message.reply(f'**当前抽奖信息**\n{lottery2message(lottery, True)}')
         return self
@@ -241,6 +248,8 @@ class LotteryBot(object):
     async def manage_lottery_handler(self, client: Client, message: Message):
         chat_id, lottery = await self._get_current_lottery(client, message)
         if lottery is None:
+            return self
+        if not (await self.check_allow(chat_id, message.from_user.id)):
             return self
         _, cmd = (message.command + ['empty'])[0: 2]
         manage_cmd = {

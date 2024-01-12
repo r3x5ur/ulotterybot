@@ -186,7 +186,7 @@ class LotteryBot(object):
             return None, None
         chat_id = await get_group_chat_id(client, message)
         if chat_id is None:
-            await message.reply('服务异常，请联系管理员')
+            await message.reply('请先创建抽奖')
             return None, None
         lottery = await load_lottery(self.aiodb, chat_id)
         if lottery is None or not is_owner(lottery, message):

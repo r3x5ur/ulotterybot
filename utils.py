@@ -1,3 +1,4 @@
+import asyncio
 from typing import TypedDict, Union, Optional
 from urllib.parse import urlparse, parse_qs
 from dblite import aioDbLite
@@ -31,6 +32,7 @@ class LotteryType(TypedDict):
     id: int
     chat_id: int
     message_id: int
+    creator_id: int
     # 抽奖标题
     title: str
     # 抽奖状态 0 已暂停 1 抽奖中 2 已结束
@@ -51,7 +53,7 @@ LotteryType.TABLE_NAME = 'lotteries'
 
 
 def make_lottery(raw: Union[list, tuple]) -> LotteryType:
-    _id, chat_id, message_id, title, status, drawn_people, winner_people, password, same_prize, prize = raw
+    _id, chat_id, message_id, title, status, drawn_people, winner_people, password, same_prize, prize, creator_id = raw
     return LotteryType(
         id=_id,
         chat_id=chat_id,
@@ -62,7 +64,8 @@ def make_lottery(raw: Union[list, tuple]) -> LotteryType:
         winner_people=winner_people,
         password=password,
         same_prize=bool(same_prize),
-        prize=prize if same_prize else str(prize).split('\n')
+        prize=prize if same_prize else str(prize).split('\n'),
+        creator_id=creator_id
     )
 
 
@@ -110,6 +113,7 @@ async def get_db_connect(app_name: str):
         password='varchar(1024)',  # 参与抽奖口令
         same_prize='int(1)',  # 1 相同的奖品  0 每个人都不一样
         prize='TEXT',  # 奖品
+        creator_id='int',  # 创建人ID
     )
     await aiodb.create(
         ParticipantType.TABLE_NAME,
@@ -179,10 +183,8 @@ async def set_lottery(aiodb: aioDbLite, lottery_id: int, **kwargs):
     await aiodb.update(LotteryType.TABLE_NAME, **updater)
 
 
-async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=0, winner_people='50%',
-                      password='默认口令',
-                      same_prize=1,
-                      prize=''):
+async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=0,
+                      winner_people='50%', password='默认口令', same_prize=1, prize='', creator_id=None):
     await aiodb.add(
         LotteryType.TABLE_NAME,
         chat_id=chat_id,
@@ -194,6 +196,7 @@ async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, dr
         password=password,
         same_prize=same_prize,
         prize=prize,
+        creator_id=creator_id,
     )
 
 
@@ -296,3 +299,17 @@ def url2dict(url: str) -> Optional[dict[str, str]]:
         return None
     parser = urlparse(url)
     return dict(scheme=parser.scheme, hostname=parser.hostname, port=parser.port)
+
+
+async def main():
+    aiodb = await get_db_connect('lotteries')
+    await add_lottery(aiodb, chat_id=930329424, message_id=123442323, title='hello', creator_id=12312)
+    sql = 'SELECT * FROM `lotteries` ORDER BY id DESC'
+    await aiodb.cursor.execute(sql)
+    data = await aiodb.cursor.fetchall()
+    data = await load_lottery_by_id(aiodb, 3)
+    __import__('pprint').pprint(data)
+
+
+if __name__ == '__main__':
+    asyncio.run(main())

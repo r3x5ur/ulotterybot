@@ -36,6 +36,10 @@ def chat_isin_group(chat: Chat):
     return chat.type == ChatType.GROUP or chat.type == ChatType.SUPERGROUP
 
 
+def is_owner(lottery: LotteryType, message: Message):
+    return lottery and lottery['creator_id'] == message.from_user.id
+
+
 async def get_group_chat_id(client: Client, message: Message, limit: int = 100) -> int:
     chat = message.chat
     messages = await client.get_messages(chat.id, range(message.id, message.id - limit, -1))
@@ -50,6 +54,8 @@ async def get_group_chat_id(client: Client, message: Message, limit: int = 100) 
 
 async def delete_all_message(client: Client, message: Message):
     chat = message.chat
+    if chat.type != ChatType.PRIVATE:
+        return
     messages = await client.get_messages(chat_id=chat.id, message_ids=range(message.id, 0, -1))
     for msg in messages:
         try:
@@ -156,7 +162,7 @@ class LotteryBot(object):
         text = f'创建抽奖成功，请查看[私聊](https://t.me/{_bot.username})信息设置抽奖内容'
         send_message = await client.send_message(chat_id, text)
         asyncio.create_task(_delete_temp_message(message, 5))
-        await add_lottery(self.aiodb, chat_id, send_message.id, title)
+        await add_lottery(self.aiodb, chat_id, send_message.id, title, creator_id=message.from_user.id)
         lottery = await load_lottery(self.aiodb, chat_id)
         if not lottery:
             await send_message.edit_text('创建抽奖失败，请检查服务')
@@ -183,7 +189,7 @@ class LotteryBot(object):
             await message.reply('服务异常，请联系管理员')
             return None, None
         lottery = await load_lottery(self.aiodb, chat_id)
-        if lottery is None:
+        if lottery is None or not is_owner(lottery, message):
             await message.reply('请先创建抽奖')
             return None, None
         return chat_id, lottery
@@ -318,8 +324,9 @@ class LotteryBot(object):
         for winner in winners:
             await set_winner_prize(self.aiodb, winner['id'], prize.pop() if len(prize) else _empty)
         _bot = await self.app.get_me()
-        await message.edit_text(lottery_winner2message(lottery, participants, winners, _bot))
-        asyncio.create_task(_delete_temp_message(message, 600))
+        msg = lottery_winner2message(lottery, participants, winners, _bot)
+        await message.edit_text(msg)
+        await self.app.send_message(chat_id=message.chat.id, text=msg)
         return lottery
 
     async def pause_lottery(self, lottery: LotteryType, message: Message):

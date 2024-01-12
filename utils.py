@@ -299,17 +299,3 @@ def url2dict(url: str) -> Optional[dict[str, str]]:
         return None
     parser = urlparse(url)
     return dict(scheme=parser.scheme, hostname=parser.hostname, port=parser.port)
-
-
-async def main():
-    aiodb = await get_db_connect('lotteries')
-    await add_lottery(aiodb, chat_id=930329424, message_id=123442323, title='hello', creator_id=12312)
-    sql = 'SELECT * FROM `lotteries` ORDER BY id DESC'
-    await aiodb.cursor.execute(sql)
-    data = await aiodb.cursor.fetchall()
-    data = await load_lottery_by_id(aiodb, 3)
-    __import__('pprint').pprint(data)
-
-
-if __name__ == '__main__':
-    asyncio.run(main())

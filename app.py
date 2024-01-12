@@ -94,7 +94,7 @@ class LotteryBot(object):
             BotCommand('help', '帮助信息'),
             BotCommand('info', '抽奖信息'),
             BotCommand('prize', '获取中奖奖品'),
-            BotCommand('clean', '清除全部信息'),
+            # BotCommand('clean', '清除全部信息'),
         ])
         await idle()
         await self.app.stop()
@@ -115,7 +115,7 @@ class LotteryBot(object):
         self.app.add_handler(MessageHandler(self.read_lottery_handler, filters.command(['info'])))
         self.app.add_handler(MessageHandler(self.manage_lottery_handler, filters.command(['manage'])))
         self.app.add_handler(MessageHandler(self.get_prize_handler, filters.command(['prize'])))
-        self.app.add_handler(MessageHandler(delete_all_message, filters.command(['clean'])))
+        # self.app.add_handler(MessageHandler(delete_all_message, filters.command(['clean'])))
         self.app.run(self.init_server())
 
     async def check_allow(self, chat_id: int, user_id: int):

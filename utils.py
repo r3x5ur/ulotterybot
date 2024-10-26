@@ -264,6 +264,7 @@ def prize2message(name: str, prize: str) -> str:
 def lottery_status2message(lottery: LotteryType, participants: list[ParticipantType]):
     participants_text = (' ' * 2).join(map(lambda x: x['user_name'], participants)) or '暂无参与人员'
     return f"""{_title.format('抽奖啦')}
+如何参与：[点击查看参与方法](https://t.me/jsdebug_channel/7)
 {lottery2message(lottery)}
 参与人数：`{int2number(len(participants))}`
 参与人员：`{participants_text}`
@@ -280,6 +281,7 @@ def lottery_winner2message(
     winner_text = (' ' * 4).join(winners_mapped)
     return f"""{_title.format('开奖啦')}
 {lottery2message(lottery)}
+如何领奖：[点击查看领奖方法](https://t.me/jsdebug_channel/11)
 参与人数：`{int2number(len(participants))}`
 中奖人数：`{int2number(len(winners))}`
 中奖名单：

@@ -183,8 +183,8 @@ async def set_lottery(aiodb: aioDbLite, lottery_id: int, **kwargs):
     await aiodb.update(LotteryType.TABLE_NAME, **updater)
 
 
-async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=0,
-                      winner_people='50%', password='默认口令', same_prize=1, prize='', creator_id=None):
+async def add_lottery(aiodb: aioDbLite, chat_id, message_id, title, status=0, drawn_people=15,
+                      winner_people='10', password='免费参与', same_prize=0, prize='', creator_id=None):
     await aiodb.add(
         LotteryType.TABLE_NAME,
         chat_id=chat_id,

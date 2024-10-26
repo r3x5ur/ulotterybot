@@ -62,6 +62,8 @@ async def delete_all_message(client: Client, message: Message):
             await client.delete_messages(chat_id=chat.id, message_ids=msg.id)
         except MessageDeleteForbidden:
             pass
+
+
 # /clean  清空我发给你的信息
 manage_doc = """`/manage start` 开启抽奖
 `/manage pause` 暂停抽奖
@@ -151,16 +153,16 @@ class LotteryBot(object):
         if old_lottery:
             _temp_message = await client.send_message(chat_id, '**存在未结束的抽奖**',
                                                       reply_to_message_id=old_lottery['message_id'])
-            asyncio.create_task(_delete_temp_message(_temp_message, 5))
+            await asyncio.create_task(_delete_temp_message(_temp_message, 5))
             return self
         username = message.from_user.username
         if not username:
             await message.reply('请先设置用户名')
             return self
-        title = message.command[1] if len(message.command) > 1 else '请设置抽奖名称'
+        title = message.command[1] if len(message.command) > 1 else '送天卡'
         text = f'创建抽奖成功，请查看[私聊](https://t.me/{_bot.username})信息设置抽奖内容'
         send_message = await client.send_message(chat_id, text)
-        asyncio.create_task(_delete_temp_message(message, 5))
+        await asyncio.create_task(_delete_temp_message(message, 5))
         await add_lottery(self.aiodb, chat_id, send_message.id, title, creator_id=message.from_user.id)
         lottery = await load_lottery(self.aiodb, chat_id)
         if not lottery:
@@ -338,7 +340,7 @@ class LotteryBot(object):
         if same:
             return lottery
         _temp_message = await message.reply('**抽奖已暂停，消息将在30秒后删除**')
-        asyncio.create_task(_delete_temp_message(_temp_message))
+        await asyncio.create_task(_delete_temp_message(_temp_message))
         return lottery
 
     async def cancel_lottery(self, lottery: LotteryType, message: Message):
@@ -352,8 +354,8 @@ class LotteryBot(object):
         await message.unpin()
         await remove_lottery_by_id(self.aiodb, lottery_id)
         _temp_message = await message.reply('**抽奖已取消，消息将在30秒后删除**')
-        asyncio.create_task(_delete_temp_message(_temp_message))
-        asyncio.create_task(_delete_temp_message(message))
+        await asyncio.create_task(_delete_temp_message(_temp_message))
+        await asyncio.create_task(_delete_temp_message(message))
 
     async def add_participant_handler(self, client: Client, message: Message):
         user = message.from_user
@@ -371,7 +373,7 @@ class LotteryBot(object):
                 return self
             lottery_id = await add_participant(self.aiodb, user_id=user_id, user_name=username, chat_id=chat.id)
             if lottery_id is None:
-                _temp_message = await message.reply(f'服务异常，请联系管理员')
+                _temp_message = await message.reply(f'没有正在进行的抽奖')
                 return self
             _temp_message = await message.reply(f'@{username} 参与抽奖成功')
             lottery = await load_lottery_by_id(self.aiodb, lottery_id)
@@ -391,7 +393,7 @@ class LotteryBot(object):
             pass
         finally:
             _temp_message and asyncio.create_task(_delete_temp_message(_temp_message, 5))
-            asyncio.create_task(_delete_temp_message(message, 5))
+            await asyncio.create_task(_delete_temp_message(message, 5))
         return self
 
     async def get_prize_handler(self, client: Client, message: Message):
